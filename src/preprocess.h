@@ -14,8 +14,7 @@ enum LID_TYPE
   DEFAULT = 0,
   VELO16 = 2,
   OUST64,
-  MID360,
-  UNITREE_L2
+  UNITREE_L2 = 5
 };
 enum TIME_UNIT
 {
@@ -153,7 +152,6 @@ class Preprocess
 private:
   void oust64_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void velodyne_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
-  void mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void unitree_l2_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void default_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void give_feature(PointCloudXYZI &pl, vector<orgtype> &types);
