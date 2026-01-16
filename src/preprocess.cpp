@@ -921,25 +921,11 @@ int Preprocess::plane_judge(const PointCloudXYZI& pl, vector<orgtype>& types, ui
     return 0;
   }
 
-  if (lidar_type == AVIA)
+  double dismax_min = disarr[0] / disarr[disarrsize - 2];
+  if (dismax_min >= limit_maxmin)
   {
-    double dismax_mid = disarr[0] / disarr[disarrsize / 2];
-    double dismid_min = disarr[disarrsize / 2] / disarr[disarrsize - 2];
-
-    if (dismax_mid >= limit_maxmid || dismid_min >= limit_midmin)
-    {
-      curr_direct.setZero();
-      return 0;
-    }
-  }
-  else
-  {
-    double dismax_min = disarr[0] / disarr[disarrsize - 2];
-    if (dismax_min >= limit_maxmin)
-    {
-      curr_direct.setZero();
-      return 0;
-    }
+    curr_direct.setZero();
+    return 0;
   }
 
   curr_direct << vx, vy, vz;
