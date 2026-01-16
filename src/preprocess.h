@@ -2,8 +2,6 @@
 #include <rclcpp/rclcpp.hpp>
 #include <pcl_conversions/pcl_conversions.h>
 #include <sensor_msgs/msg/point_cloud2.hpp>
-#include <livox_ros_driver2/msg/custom_msg.hpp>
-
 using namespace std;
 
 #define IS_VALID(a) ((abs(a) > 1e8) ? true : false)
@@ -14,12 +12,11 @@ typedef pcl::PointCloud<PointType> PointCloudXYZI;
 enum LID_TYPE
 {
   DEFAULT = 0,
-  AVIA = 1,
-  VELO16,
+  VELO16 = 2,
   OUST64,
   MID360,
   UNITREE_L2
-};  //{0, 1, 2, 3, 4, 5}
+};
 enum TIME_UNIT
 {
   SEC = 0,
@@ -114,43 +111,7 @@ POINT_CLOUD_REGISTER_POINT_STRUCT(ouster_ros::Point,
     (std::uint32_t, range, range)
 )
 
-namespace livox_ros
-{
-typedef struct {
-  float x;            /**< X axis, Unit:m */
-  float y;            /**< Y axis, Unit:m */
-  float z;            /**< Z axis, Unit:m */
-  float reflectivity; /**< Reflectivity   */
-  uint8_t tag;        /**< Livox point tag   */
-  uint8_t line;       /**< Laser line id     */
-} LivoxPointXyzrtl;
 
-typedef struct {
-  float x;            /**< X axis, Unit:m */
-  float y;            /**< Y axis, Unit:m */
-  float z;            /**< Z axis, Unit:m */
-  float intensity;    /**< Intensity   */
-  uint8_t tag;        /**< Livox point tag   */
-  uint8_t line;       /**< Laser line id     */
-} LivoxPointXyzitl;
-}
-POINT_CLOUD_REGISTER_POINT_STRUCT(livox_ros::LivoxPointXyzrtl,
-    (float, x, x)
-    (float, y, y)
-    (float, z, z)
-    (float, reflectivity, reflectivity)
-    (uint8_t, tag, tag)
-    (uint8_t, line, line)
-)
-
-POINT_CLOUD_REGISTER_POINT_STRUCT(livox_ros::LivoxPointXyzitl,
-    (float, x, x)
-    (float, y, y)
-    (float, z, z)
-    (float, intensity, intensity)
-    (uint8_t, tag, tag)
-    (uint8_t, line, line)
-)
 
 namespace unitree_l2_ros
 {
@@ -176,7 +137,6 @@ class Preprocess
   Preprocess();
   ~Preprocess();
   
-  void process(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out);
   void process(const sensor_msgs::msg::PointCloud2::UniquePtr &msg, PointCloudXYZI::Ptr &pcl_out);
   void set(bool feat_en, int lid_type, double bld, int pfilt_num);
 
@@ -191,7 +151,6 @@ class Preprocess
   // ros::Publisher pub_full, pub_surf, pub_corn;
 
 private:
-  void avia_handler(const livox_ros_driver2::msg::CustomMsg::UniquePtr &msg);
   void oust64_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void velodyne_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
   void mid360_handler(const sensor_msgs::msg::PointCloud2::UniquePtr &msg);
