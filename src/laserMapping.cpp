@@ -1139,6 +1139,8 @@ int main(int argc, char** argv)
     if (pcd_save_en && pcl_wait_pub->size() > 0)
     {
         save_to_pcd();
+        RCLCPP_INFO(rclcpp::get_logger("fast_lio.mapping"),
+                    "Map saved to %s", map_file_path.c_str());
     }
 
     if (runtime_pos_log)
