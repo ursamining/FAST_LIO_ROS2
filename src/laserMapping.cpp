@@ -489,7 +489,7 @@ void publish_frame_world(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::Share
     /**************** save map ****************/
     /* 1. make sure you have enough memories
     /* 2. noted that pcd save will influence the real-time performences **/
-    
+    /*
     if (pcd_save_en)
     {
         int size = feats_undistort->points.size();
@@ -515,7 +515,7 @@ void publish_frame_world(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::Share
             pcl_wait_save->clear();
             scan_wait_num = 0;
         }
-    }
+    } */
     
 }
 
