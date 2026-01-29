@@ -1148,7 +1148,7 @@ int main(int argc, char** argv)
     /**************** save map ****************/
     /* 1. make sure you have enough memories
     /* 2. pcd save will largely influence the real-time performences **/
-    if (pcd_save_en && pcl_wait_pub->size() > 0)
+    if (pcd_save_en && (pcl_wait_pub->size() > 0 || ikdtree.Root_Node != nullptr))
     {
         save_to_pcd();
         RCLCPP_INFO(rclcpp::get_logger("fast_lio.mapping"),
