@@ -585,6 +585,18 @@ void publish_map(rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub
 
 void save_to_pcd()
 {
+    // If map publishing is disabled, `pcl_wait_pub` may remain empty because it is normally
+    // populated inside `publish_map()`. In that case, dump the current KD-tree map instead.
+    if (pcl_wait_pub->empty() && ikdtree.Root_Node != nullptr)
+    {
+        PointVector().swap(ikdtree.PCL_Storage);
+        ikdtree.flatten(ikdtree.Root_Node, ikdtree.PCL_Storage, NOT_RECORD);
+        pcl_wait_pub->clear();
+        pcl_wait_pub->points = ikdtree.PCL_Storage;
+        pcl_wait_pub->width = static_cast<uint32_t>(pcl_wait_pub->points.size());
+        pcl_wait_pub->height = 1;
+        pcl_wait_pub->is_dense = true;
+    }
     pcl::PCDWriter pcd_writer;
     pcd_writer.writeBinary(map_file_path, *pcl_wait_pub);
 }
