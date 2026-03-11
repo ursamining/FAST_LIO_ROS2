@@ -60,6 +60,8 @@
 #include <tf2_ros/buffer.h>
 #include <tf2_ros/transform_listener.h>
 #include <tf2/exceptions.h>
+#include <atomic>
+#include <functional>
 #include <geometry_msgs/msg/transform_stamped.hpp>
 #include <geometry_msgs/msg/vector3.hpp>
 #include "preprocess.h"
@@ -91,6 +93,9 @@ string map_file_path, lid_topic, imu_topic;
 string map_frame_id = "map";
 string body_frame_id = "base_link";
 string sensor_frame_id = "";  // If set and different from body, we publish map->body using TF sensor->body
+
+// When true, timer_callback will replace TF buffer/listener (deferred from subscription callbacks to avoid free(): invalid pointer).
+std::atomic<bool> g_request_tf_buffer_clear{false};
 
 double res_mean_last = 0.05, total_residual = 0.0;
 double last_timestamp_lidar = 0, last_timestamp_imu = -1.0;
@@ -302,8 +307,13 @@ void standard_pcl_cbk(const sensor_msgs::msg::PointCloud2::UniquePtr msg)
     double preprocess_start_time = omp_get_wtime();
     if (!is_first_lidar && cur_time < last_timestamp_lidar)
     {
-        std::cerr << "lidar loop back, clear buffer" << std::endl;
+        RCLCPP_WARN(logger,
+            "Time jump backwards detected (e.g. rosbag restart). Clearing lidar, IMU and TF buffers; will use new data.");
         lidar_buffer.clear();
+        time_buffer.clear();
+        imu_buffer.clear();
+        last_timestamp_imu = -1.0;  // so next IMU is not treated as 'in the past'
+        g_request_tf_buffer_clear = true;
     }
     if (is_first_lidar)
     {
@@ -355,8 +365,13 @@ void imu_cbk(const sensor_msgs::msg::Imu::UniquePtr msg_in)
 
     if (timestamp < last_timestamp_imu)
     {
-        std::cerr << "lidar loop back, clear buffer" << std::endl;
+        RCLCPP_WARN(logger,
+            "Time jump backwards detected (e.g. rosbag restart). Clearing lidar, IMU and TF buffers; will use new data.");
+        lidar_buffer.clear();
+        time_buffer.clear();
         imu_buffer.clear();
+        last_timestamp_lidar = 0.0;  // so next lidar is not treated as 'in the past'
+        g_request_tf_buffer_clear = true;
     }
 
     last_timestamp_imu = timestamp;
@@ -993,6 +1008,13 @@ public:
 private:
     void timer_callback()
     {
+        if (g_request_tf_buffer_clear.exchange(false))
+        {
+            // Replace listener first so it is destroyed while the old buffer still exists.
+            auto new_buffer = std::make_shared<tf2_ros::Buffer>(this->get_clock());
+            tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*new_buffer);
+            tf_buffer_ = std::move(new_buffer);
+        }
         if(sync_packages(Measures))
         {
             if (flg_first_scan)
