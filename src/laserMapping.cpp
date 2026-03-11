@@ -1038,6 +1038,33 @@ private:
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 
+            // Once at init: set map origin at body (BASE) instead of sensor when using frame_id.sensor.
+            if (!applied_map_at_body_init_ && !sensor_frame_id.empty() && sensor_frame_id != body_frame_id && tf_buffer_)
+            {
+                try
+                {
+                    rclcpp::Time stamp = get_ros_time(Measures.lidar_beg_time);
+                    geometry_msgs::msg::TransformStamped T_body_sensor_msg = tf_buffer_->lookupTransform(
+                        body_frame_id, sensor_frame_id, stamp, rclcpp::Duration::from_seconds(0.5));
+                    state_point.pos(0) = T_body_sensor_msg.transform.translation.x;
+                    state_point.pos(1) = T_body_sensor_msg.transform.translation.y;
+                    state_point.pos(2) = T_body_sensor_msg.transform.translation.z;
+                    Eigen::Quaterniond q(T_body_sensor_msg.transform.rotation.w,
+                                         T_body_sensor_msg.transform.rotation.x,
+                                         T_body_sensor_msg.transform.rotation.y,
+                                         T_body_sensor_msg.transform.rotation.z);
+                    state_point.rot = SO3(q.normalized());
+                    kf.change_x(state_point);
+                    pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
+                    applied_map_at_body_init_ = true;
+                    RCLCPP_INFO(this->get_logger(), "Map origin set to body frame '%s' at init.", body_frame_id.c_str());
+                }
+                catch (const tf2::TransformException & ex)
+                {
+                    RCLCPP_WARN(this->get_logger(), "Could not set map at body init: %s", ex.what());
+                }
+            }
+
             if (feats_undistort->empty() || (feats_undistort == NULL))
             {
                 RCLCPP_WARN(this->get_logger(), "No point, skip this scan!\n");
@@ -1199,6 +1226,7 @@ private:
     std::unique_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster_;
     std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
     std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+    bool applied_map_at_body_init_ = false;
     rclcpp::TimerBase::SharedPtr timer_;
     rclcpp::TimerBase::SharedPtr map_pub_timer_;
     rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr map_save_srv_;
