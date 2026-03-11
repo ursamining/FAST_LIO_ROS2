@@ -93,6 +93,7 @@ string map_file_path, lid_topic, imu_topic;
 string map_frame_id = "map";
 string body_frame_id = "base_link";
 string sensor_frame_id = "";  // If set and different from body, we publish map->body using TF sensor->body
+bool init_map_gravity_aligned = false;  // If true, map-at-body init uses z = up (inverse gravity) for orientation
 
 // When true, timer_callback will replace TF buffer/listener (deferred from subscription callbacks to avoid free(): invalid pointer).
 std::atomic<bool> g_request_tf_buffer_clear{false};
@@ -885,6 +886,7 @@ public:
         this->declare_parameter<string>("frame_id.map", "map");
         this->declare_parameter<string>("frame_id.body", "base_link");
         this->declare_parameter<string>("frame_id.sensor", "");
+        this->declare_parameter<bool>("init_map_gravity_aligned", false);
 
         this->get_parameter_or<bool>("publish.path_en", path_en, true);
         this->get_parameter_or<bool>("publish.effect_map_en", effect_pub_en, false);
@@ -924,6 +926,7 @@ public:
         this->get_parameter_or<string>("frame_id.map", map_frame_id, "map");
         this->get_parameter_or<string>("frame_id.body", body_frame_id, "base_link");
         this->get_parameter_or<string>("frame_id.sensor", sensor_frame_id, "");
+        this->get_parameter_or<bool>("init_map_gravity_aligned", init_map_gravity_aligned, false);
 
         RCLCPP_INFO(this->get_logger(), "p_pre->lidar_type %d", p_pre->lidar_type);
         RCLCPP_INFO(this->get_logger(), "frame_id: map=%s body=%s sensor=%s", map_frame_id.c_str(), body_frame_id.c_str(), sensor_frame_id.c_str());
@@ -1049,15 +1052,39 @@ private:
                     state_point.pos(0) = T_body_sensor_msg.transform.translation.x;
                     state_point.pos(1) = T_body_sensor_msg.transform.translation.y;
                     state_point.pos(2) = T_body_sensor_msg.transform.translation.z;
-                    Eigen::Quaterniond q(T_body_sensor_msg.transform.rotation.w,
-                                         T_body_sensor_msg.transform.rotation.x,
-                                         T_body_sensor_msg.transform.rotation.y,
-                                         T_body_sensor_msg.transform.rotation.z);
-                    state_point.rot = SO3(q.normalized());
+                    if (init_map_gravity_aligned)
+                    {
+                        // Orientation: map z = up (inverse gravity). state_point.grav is gravity in sensor frame (down).
+                        Eigen::Vector3d up_sensor(-state_point.grav[0], -state_point.grav[1], -state_point.grav[2]);
+                        double n = up_sensor.norm();
+                        if (n < 1e-6) { up_sensor = Eigen::Vector3d(0, 0, 1); n = 1.0; }
+                        else up_sensor /= n;
+                        Eigen::Vector3d row2 = up_sensor;
+                        Eigen::Vector3d row0;
+                        if (std::abs(row2.dot(Eigen::Vector3d::UnitX())) < 0.9)
+                            row0 = row2.cross(Eigen::Vector3d::UnitX()).normalized();
+                        else
+                            row0 = row2.cross(Eigen::Vector3d::UnitY()).normalized();
+                        Eigen::Vector3d row1 = row2.cross(row0).normalized();
+                        Eigen::Matrix3d R_map_sensor;
+                        R_map_sensor.row(0) = row0;
+                        R_map_sensor.row(1) = row1;
+                        R_map_sensor.row(2) = row2;
+                        state_point.rot = SO3(R_map_sensor);
+                    }
+                    else
+                    {
+                        Eigen::Quaterniond q(T_body_sensor_msg.transform.rotation.w,
+                                             T_body_sensor_msg.transform.rotation.x,
+                                             T_body_sensor_msg.transform.rotation.y,
+                                             T_body_sensor_msg.transform.rotation.z);
+                        state_point.rot = SO3(q.normalized());
+                    }
                     kf.change_x(state_point);
                     pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
                     applied_map_at_body_init_ = true;
-                    RCLCPP_INFO(this->get_logger(), "Map origin set to body frame '%s' at init.", body_frame_id.c_str());
+                    RCLCPP_INFO(this->get_logger(), "Map origin set to body frame '%s' at init (gravity_aligned=%d).",
+                                body_frame_id.c_str(), init_map_gravity_aligned);
                 }
                 catch (const tf2::TransformException & ex)
                 {
